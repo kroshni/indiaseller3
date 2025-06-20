@@ -16,6 +16,21 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/dashboard/brands/page.js"
     ],
+    "/login/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/login/page.js"
+    ],
+    "/admin/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/dashboard/page.js"
+    ],
+    "/admin/dashboard/categories/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/dashboard/categories/page.js"
+    ],
     "/admin/dashboard/sellers/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",

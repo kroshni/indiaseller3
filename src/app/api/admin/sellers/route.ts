@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCassandraClient } from '@/lib/db/cassandra'
+import { cassandraClient } from '@/lib/db/cassandra'
 import { v4 as uuidv4 } from 'uuid'
 import { hash } from 'bcryptjs'
 import { types } from 'cassandra-driver'
@@ -14,10 +14,6 @@ export async function GET(request: Request) {
     const status = searchParams.get('status') || ''
     const sortBy = searchParams.get('sortBy') || 'business_name'
     const sortOrder = searchParams.get('sortOrder') || 'asc'
-
-    const client = await getCassandraClient()
-    // Ensure we're using the correct keyspace
-    await client.execute('USE indiaseller3')
 
     let query = 'SELECT * FROM sellers'
     let conditions = []
@@ -37,7 +33,7 @@ export async function GET(request: Request) {
       query += ' WHERE ' + conditions.join(' AND ') + ' ALLOW FILTERING'
     }
 
-    const result = await client.execute(query, params, { prepare: true })
+    const result = await cassandraClient.execute(query, params, { prepare: true })
     
     // Manual sorting since Cassandra doesn't support ORDER BY without partition key
     let sellers = result.rows
@@ -213,7 +209,7 @@ export async function POST(request: Request) {
     }
 
     // Execute all inserts in batch
-    await client.batch(batch, { prepare: true })
+    await cassandraClient.batch(batch, { prepare: true })
 
     return NextResponse.json({
       message: 'Seller created successfully',
@@ -238,12 +234,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Seller ID is required' }, { status: 400 })
     }
 
-    const client = await getCassandraClient()
-    // Ensure we're using the correct keyspace
-    await client.execute('USE indiaseller3')
-
     // Get current seller
-    const currentSeller = await client.execute(
+    const currentSeller = await cassandraClient.execute(
       'SELECT * FROM sellers WHERE id = ?',
       [id],
       { prepare: true }
@@ -258,7 +250,7 @@ export async function PUT(request: Request) {
 
     // If email is being updated, check if new email exists
     if (updateFields.email && updateFields.email !== oldEmail) {
-      const checkEmail = await client.execute(
+      const checkEmail = await cassandraClient.execute(
         'SELECT * FROM sellers_by_email WHERE email = ?',
         [updateFields.email],
         { prepare: true }
@@ -274,7 +266,7 @@ export async function PUT(request: Request) {
       .map(field => `${field} = ?`)
       .join(', ')}, updated_at = ? WHERE id = ?`
 
-    await client.execute(
+    await cassandraClient.execute(
       updateQuery,
       [...Object.values(updateFields), now, id],
       { prepare: true }
@@ -282,12 +274,12 @@ export async function PUT(request: Request) {
 
     // Update sellers_by_email table if email changed
     if (updateFields.email && updateFields.email !== oldEmail) {
-      await client.execute(
+      await cassandraClient.execute(
         'DELETE FROM sellers_by_email WHERE email = ?',
         [oldEmail],
         { prepare: true }
       )
-      await client.execute(
+      await cassandraClient.execute(
         'INSERT INTO sellers_by_email (email, seller_id) VALUES (?, ?)',
         [updateFields.email, id],
         { prepare: true }
@@ -315,12 +307,8 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Seller ID is required' }, { status: 400 })
     }
 
-    const client = await getCassandraClient()
-    // Ensure we're using the correct keyspace
-    await client.execute('USE indiaseller3')
-
     // Get seller to delete email reference
-    const seller = await client.execute(
+    const seller = await cassandraClient.execute(
       'SELECT email FROM sellers WHERE id = ?',
       [id],
       { prepare: true }
@@ -333,14 +321,14 @@ export async function DELETE(request: Request) {
     const email = seller.rows[0].email
 
     // Delete from sellers table
-    await client.execute(
+    await cassandraClient.execute(
       'DELETE FROM sellers WHERE id = ?',
       [id],
       { prepare: true }
     )
 
     // Delete from sellers_by_email table
-    await client.execute(
+    await cassandraClient.execute(
       'DELETE FROM sellers_by_email WHERE email = ?',
       [email],
       { prepare: true }
@@ -348,10 +336,10 @@ export async function DELETE(request: Request) {
 
     // Delete related records
     await Promise.all([
-      client.execute('DELETE FROM seller_documents WHERE seller_id = ?', [id], { prepare: true }),
-      client.execute('DELETE FROM seller_addresses WHERE seller_id = ?', [id], { prepare: true }),
-      client.execute('DELETE FROM seller_gallery WHERE seller_id = ?', [id], { prepare: true }),
-      client.execute('DELETE FROM seller_certifications WHERE seller_id = ?', [id], { prepare: true })
+      cassandraClient.execute('DELETE FROM seller_documents WHERE seller_id = ?', [id], { prepare: true }),
+      cassandraClient.execute('DELETE FROM seller_addresses WHERE seller_id = ?', [id], { prepare: true }),
+      cassandraClient.execute('DELETE FROM seller_gallery WHERE seller_id = ?', [id], { prepare: true }),
+      cassandraClient.execute('DELETE FROM seller_certifications WHERE seller_id = ?', [id], { prepare: true })
     ])
 
     return NextResponse.json({ success: true })
@@ -375,10 +363,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'No updates provided' }, { status: 400 })
     }
 
-    const client = await getCassandraClient()
-    // Ensure we're using the correct keyspace
-    await client.execute('USE indiaseller3')
-
     const now = new Date()
     const updateQuery = `UPDATE sellers SET ${Object.keys(updates)
       .map(field => `${field} = ?`)
@@ -387,7 +371,7 @@ export async function PATCH(request: Request) {
     // Update each seller
     await Promise.all(
       ids.map(id =>
-        client.execute(
+        cassandraClient.execute(
           updateQuery,
           [...Object.values(updates), now, id],
           { prepare: true }

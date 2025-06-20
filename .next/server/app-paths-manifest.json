@@ -1,7 +1,11 @@
 {
-  "/api/admin/brands/route": "app/api/admin/brands/route.js",
-  "/api/admin/sellers/route": "app/api/admin/sellers/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/admin/brands/route": "app/api/admin/brands/route.js",
+  "/login/page": "app/login/page.js",
+  "/api/admin/categories/route": "app/api/admin/categories/route.js",
+  "/api/admin/sellers/route": "app/api/admin/sellers/route.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
   "/admin/dashboard/brands/page": "app/admin/dashboard/brands/page.js",
+  "/admin/dashboard/categories/page": "app/admin/dashboard/categories/page.js",
   "/admin/dashboard/sellers/page": "app/admin/dashboard/sellers/page.js"
 }
