@@ -1,25 +1,22 @@
 import { Client } from 'cassandra-driver'
 
-const client = new Client({
-  contactPoints: [process.env.CASSANDRA_CONTACT_POINT || 'localhost'],
-  localDataCenter: process.env.CASSANDRA_LOCAL_DC || 'datacenter1',
-  keyspace: 'indiaseller3',
+export const cassandraClient = new Client({
+  contactPoints: ['127.0.0.1:9042'],
+  localDataCenter: 'datacenter1',
   credentials: {
-    username: process.env.CASSANDRA_USERNAME || 'cassandra',
-    password: process.env.CASSANDRA_PASSWORD || 'cassandra',
-  },
-  protocolOptions: {
-    port: 9043  // Updated port
+    username: 'cassandra',
+    password: 'cassandra'
   }
 })
 
-export async function initCassandra() {
+// Initialize connection and keyspace
+async function initCassandra() {
   try {
-    await client.connect()
+    await cassandraClient.connect()
     console.log('Connected to Cassandra')
 
     // Create keyspace if it doesn't exist
-    await client.execute(`
+    await cassandraClient.execute(`
       CREATE KEYSPACE IF NOT EXISTS indiaseller3
       WITH replication = {
         'class': 'SimpleStrategy',
@@ -28,34 +25,32 @@ export async function initCassandra() {
     `)
 
     // Switch to our keyspace
-    await client.execute('USE indiaseller3')
+    await cassandraClient.execute('USE indiaseller3')
 
     // Initialize tables
     await initTables()
-
-    return client
   } catch (error) {
-    console.error('Error connecting to Cassandra:', error)
+    console.error('Error initializing Cassandra:', error)
     throw error
   }
 }
 
 async function initTables() {
   // Users table
-  await client.execute(`
+  await cassandraClient.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id uuid PRIMARY KEY,
       email text,
       name text,
-      role text,
-      password_hash text,
+      user_type text,
+      password text,
       created_at timestamp,
       updated_at timestamp
     )
   `)
 
   // Products table
-  await client.execute(`
+  await cassandraClient.execute(`
     CREATE TABLE IF NOT EXISTS products (
       id uuid PRIMARY KEY,
       seller_id uuid,
@@ -70,7 +65,7 @@ async function initTables() {
   `)
 
   // Categories table
-  await client.execute(`
+  await cassandraClient.execute(`
     CREATE TABLE IF NOT EXISTS categories (
       id uuid PRIMARY KEY,
       name text,
@@ -82,7 +77,7 @@ async function initTables() {
   `)
 
   // Services table
-  await client.execute(`
+  await cassandraClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
       id uuid PRIMARY KEY,
       provider_id uuid,
@@ -97,15 +92,15 @@ async function initTables() {
   `)
 }
 
-// Helper functions for common database operations
-export async function executeQuery(query: string, params: any[] = []) {
-  try {
-    const result = await client.execute(query, params, { prepare: true })
-    return result.rows
-  } catch (error) {
-    console.error('Error executing query:', error)
-    throw error
-  }
-}
+// Initialize Cassandra on startup
+initCassandra()
+  .then(() => console.log('Cassandra initialized successfully'))
+  .catch(err => console.error('Failed to initialize Cassandra:', err))
 
-export default client 
+// Handle process termination
+process.on('SIGTERM', () => {
+  cassandraClient.shutdown()
+    .then(() => process.exit(0))
+})
+
+export default cassandraClient 

@@ -1,25 +1,31 @@
-version: '3.8'
+version: '3'
 
 services:
   cassandra:
     image: cassandra:latest
-    container_name: indiaseller_cassandra
+    container_name: indiaseller3_cassandra
     ports:
-      - "9043:9042"  # Changed host port to 9043
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=indiaseller3_cluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch
+      - CASSANDRA_START_RPC=true
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
     volumes:
       - cassandra_data:/var/lib/cassandra
-      - ./backups:/backups  # Mount a directory for backups
-    environment:
-      - CASSANDRA_CLUSTER_NAME=IndiaSeller
-      - CASSANDRA_DC=datacenter1
-      - CASSANDRA_RACK=rack1
-      - CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch
     healthcheck:
-      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe keyspaces"]
       interval: 15s
       timeout: 10s
       retries: 10
+    networks:
+      - indiaseller3_network
+
+networks:
+  indiaseller3_network:
+    driver: bridge
 
 volumes:
-  cassandra_data:
-    name: indiaseller_cassandra_data 
+  cassandra_data: 

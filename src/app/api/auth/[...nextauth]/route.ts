@@ -1,77 +1,74 @@
 import NextAuth from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { executeQuery } from '@/lib/db/cassandra'
-import type { NextAuthConfig } from 'next-auth'
+import bcrypt from 'bcryptjs'
+import { cassandraClient } from '@/lib/db/cassandra'
 
-const config = {
+const handler = NextAuth({
   providers: [
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-        userType: { label: "User Type", type: "text" }
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+        userType: { label: 'User Type', type: 'text' }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error('Please enter an email and password')
+        if (!credentials?.email || !credentials?.password || !credentials?.userType) {
+          throw new Error('Missing credentials')
         }
 
         try {
-          // Query user from Cassandra
-          const users = await executeQuery(
-            'SELECT * FROM users WHERE email = ? ALLOW FILTERING',
-            [credentials.email]
-          )
-
-          const user = users[0]
+          const query = 'SELECT * FROM users WHERE email = ? AND user_type = ? ALLOW FILTERING'
+          const result = await cassandraClient.execute(query, [credentials.email, credentials.userType], { prepare: true })
+          const user = result.rows[0]
 
           if (!user) {
-            throw new Error('No user found with this email')
+            throw new Error('User not found')
           }
 
-          // Here you would typically verify the password hash
-          // For now, we'll just return the user
-          // In production, implement proper password hashing and verification
-          
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+          if (!isPasswordValid) {
+            throw new Error('Invalid password')
+          }
+
           return {
-            id: user.id,
+            id: user.id.toString(),
             email: user.email,
             name: user.name,
-            role: user.role,
-            userType: credentials.userType
+            role: user.user_type
           }
         } catch (error) {
-          console.error('Error during authentication:', error)
-          throw new Error('Authentication error')
+          console.error('Auth error:', error)
+          throw error
         }
       }
     })
   ],
-  session: {
-    strategy: 'jwt'
-  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role
-        token.userType = user.userType
+        token.id = user.id
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role
-        (session.user as any).userType = token.userType
+        session.user.role = token.role as string
+        session.user.id = token.id as string
       }
       return session
     }
   },
   pages: {
     signIn: '/login',
+    error: '/login'
   },
-} satisfies NextAuthConfig
-
-const handler = NextAuth(config)
+  session: {
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60 // 24 hours
+  },
+  secret: process.env.NEXTAUTH_SECRET
+})
 
 export { handler as GET, handler as POST } 

@@ -1,170 +1,113 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { signIn } from 'next-auth'
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { validateEmail } from '@/lib/utils/validation'
-
-const userTypeOptions = [
-  { value: 'customer', label: 'Customer' },
-  { value: 'seller', label: 'Seller' },
-  { value: 'admin', label: 'Admin' },
-]
+import { Toaster, toast } from 'react-hot-toast'
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/admin/dashboard'
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    userType: 'admin' // Default to admin
+  })
+
   const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<{
-    email?: string
-    password?: string
-    general?: string
-  }>({})
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (searchParams.get('registered') === 'true') {
-      setSuccessMessage('Registration successful! Please log in.')
-    }
-  }, [searchParams])
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsLoading(true)
-    setErrors({})
-    setSuccessMessage(null)
-
-    const formData = new FormData(event.currentTarget)
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
-    const userType = formData.get('userType') as string
-
-    // Validate email
-    if (!validateEmail(email)) {
-      setErrors({ email: 'Please enter a valid email address' })
-      setIsLoading(false)
-      return
-    }
 
     try {
       const result = await signIn('credentials', {
-        email,
-        password,
-        userType,
+        email: formData.email,
+        password: formData.password,
+        userType: formData.userType,
         redirect: false,
+        callbackUrl
       })
 
       if (result?.error) {
-        setErrors({ general: 'Invalid email or password' })
-        return
-      }
-
-      // Redirect based on user type
-      switch (userType) {
-        case 'admin':
-          router.push('/admin/dashboard')
-          break
-        case 'seller':
-          router.push('/seller/dashboard')
-          break
-        case 'customer':
-          router.push('/dashboard')
-          break
-        default:
-          router.push('/')
+        toast.error(result.error)
+      } else {
+        toast.success('Login successful!')
+        // Redirect based on user type
+        switch (formData.userType) {
+          case 'admin':
+            router.push('/admin/dashboard')
+            break
+          case 'seller':
+            router.push('/seller/dashboard')
+            break
+          case 'customer':
+            router.push('/dashboard')
+            break
+          default:
+            router.push('/')
+        }
       }
     } catch (error) {
-      setErrors({ general: 'An error occurred during login' })
+      toast.error('An error occurred during login')
+      console.error('Login error:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-          Sign in to your account
-        </h2>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          {successMessage && (
-            <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-md">
-              {successMessage}
-            </div>
-          )}
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <Select
-              id="userType"
-              name="userType"
-              label="Login as"
-              options={userTypeOptions}
-              defaultValue="customer"
-            />
-
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              label="Email address"
-              autoComplete="email"
-              required
-              error={errors.email}
-            />
-
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              label="Password"
-              autoComplete="current-password"
-              required
-              error={errors.password}
-            />
-
-            {errors.general && (
-              <div className="text-red-600 text-sm">
-                {errors.general}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm">
-                <Link
-                  href="/forgot-password"
-                  className="font-medium text-primary-600 hover:text-primary-500"
-                >
-                  Forgot your password?
-                </Link>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </Button>
-
-            <div className="text-center text-sm">
-              <span className="text-gray-600">Don't have an account?</span>{' '}
-              <Link
-                href="/register"
-                className="font-medium text-primary-600 hover:text-primary-500"
-              >
-                Register now
-              </Link>
-            </div>
-          </form>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <Toaster position="top-center" />
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
         </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm space-y-4">
+            <Select
+              value={formData.userType}
+              onChange={(e) => setFormData({ ...formData, userType: e.target.value })}
+              options={[
+                { value: 'admin', label: 'Admin' },
+                { value: 'seller', label: 'Seller' },
+                { value: 'customer', label: 'Customer' }
+              ]}
+              label="User Type"
+            />
+            <Input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="Email address"
+              required
+              label="Email"
+            />
+            <Input
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Password"
+              required
+              label="Password"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Signing in...' : 'Sign in'}
+          </Button>
+        </form>
       </div>
     </div>
   )
