@@ -4,6 +4,7 @@ import { Client } from 'cassandra-driver'
 export const cassandraClient = new Client({
   contactPoints: ['127.0.0.1:9042'],
   localDataCenter: 'datacenter1',
+  keyspace: 'indiaseller3',  // Set default keyspace
   credentials: {
     username: 'cassandra',
     password: 'cassandra'
@@ -35,7 +36,19 @@ async function initCassandra() {
     console.log('Connected to Cassandra')
 
     // Create keyspace if it doesn't exist
-    await cassandraClient.execute(`
+    // We need to create this without being connected to a keyspace
+    const systemClient = new Client({
+      contactPoints: ['127.0.0.1:9042'],
+      localDataCenter: 'datacenter1',
+      credentials: {
+        username: 'cassandra',
+        password: 'cassandra'
+      }
+    })
+
+    await systemClient.connect()
+    
+    await systemClient.execute(`
       CREATE KEYSPACE IF NOT EXISTS indiaseller3
       WITH replication = {
         'class': 'SimpleStrategy',
@@ -43,9 +56,7 @@ async function initCassandra() {
       }
     `)
 
-    // Switch to our keyspace
-    await cassandraClient.execute('USE indiaseller3')
-    console.log('Using keyspace: indiaseller3')
+    await systemClient.shutdown()
 
     // Initialize tables
     await initTables()
@@ -86,6 +97,52 @@ async function initTables() {
       CREATE INDEX IF NOT EXISTS users_type_idx ON users (user_type)
     `)
     console.log('User type index created/verified')
+
+    // Create categories table
+    await cassandraClient.execute(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id uuid,
+        name text,
+        slug text,
+        description text,
+        status text,
+        created_at timestamp,
+        updated_at timestamp,
+        PRIMARY KEY (id)
+      )
+    `)
+    console.log('Categories table created/verified')
+
+    // Create category indices
+    await cassandraClient.execute(`
+      CREATE INDEX IF NOT EXISTS categories_slug_idx ON categories (slug)
+    `)
+    await cassandraClient.execute(`
+      CREATE INDEX IF NOT EXISTS categories_status_idx ON categories (status)
+    `)
+    console.log('Category indices created/verified')
+
+    // Create brands table
+    await cassandraClient.execute(`
+      CREATE TABLE IF NOT EXISTS brands (
+        id uuid,
+        name text,
+        logo_url text,
+        description text,
+        website_url text,
+        status text,
+        created_at timestamp,
+        updated_at timestamp,
+        PRIMARY KEY (id)
+      )
+    `)
+    console.log('Brands table created/verified')
+
+    // Create brand indices
+    await cassandraClient.execute(`
+      CREATE INDEX IF NOT EXISTS brands_status_idx ON brands (status)
+    `)
+    console.log('Brand indices created/verified')
 
   } catch (error) {
     console.error('Error creating tables:', error)

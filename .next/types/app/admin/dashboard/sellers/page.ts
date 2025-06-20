@@ -1,8 +1,8 @@
-// File: D:\python\GC\indiaSellerNextJs_cursor\indiaseller3\src\app\admin\dashboard\page.tsx
-import * as entry from '../../../../../src/app/admin/dashboard/page.js'
+// File: D:\python\GC\indiaSellerNextJs_cursor\indiaseller3\src\app\admin\dashboard\sellers\page.tsx
+import * as entry from '../../../../../../src/app/admin/dashboard/sellers/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
-type TEntry = typeof import('../../../../../src/app/admin/dashboard/page.js')
+type TEntry = typeof import('../../../../../../src/app/admin/dashboard/sellers/page.js')
 
 // Check that the entry is a valid entry
 checkFields<Diff<{

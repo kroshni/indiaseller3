@@ -1,36 +1,31 @@
-'use client'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth/config'
+import Sidebar from '@/components/layout/Sidebar'
 
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+async function getSession() {
+  const session = await getServerSession(authOptions)
+  return session
+}
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const session = await getSession()
 
-  useEffect(() => {
-    // Redirect to login if not authenticated or not an admin
-    if (status === 'unauthenticated' || session?.user?.role !== 'admin') {
-      router.push('/login')
-    }
-  }, [session, status, router])
-
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-2xl">Loading...</div>
-      </div>
-    )
+  if (!session || session.user?.role !== 'admin') {
+    redirect('/login')
   }
 
-  // Only render children if authenticated and admin
-  if (status === 'authenticated' && session?.user?.role === 'admin') {
-    return <>{children}</>
-  }
-
-  return null
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <main className="flex-1 p-8 bg-gray-100">
+        {children}
+      </main>
+    </div>
+  )
 } 

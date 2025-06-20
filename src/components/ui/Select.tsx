@@ -1,3 +1,5 @@
+'use client'
+
 import { forwardRef, SelectHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -11,32 +13,46 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string
   helperText?: string
   options: SelectOption[]
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+  placeholder?: string
+  required?: boolean
+  disabled?: boolean
+  className?: string
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, helperText, options, ...props }, ref) => {
+  ({ className, label, error, helperText, options, value, onChange, placeholder, required = false, disabled = false, id }, ref) => {
     return (
       <div className="w-full">
         {label && (
           <label
-            htmlFor={props.id}
+            htmlFor={id}
             className="block text-sm font-medium text-gray-700 mb-1"
           >
             {label}
+            {required && <span className="text-red-500">*</span>}
           </label>
         )}
         <div className="relative">
           <select
+            id={id}
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+            required={required}
             className={cn(
               'block w-full px-3 py-2 border rounded-md shadow-sm bg-white focus:outline-none sm:text-sm',
-              error
-                ? 'border-red-300 text-red-900 focus:ring-red-500 focus:border-red-500'
-                : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500',
+              error ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500',
               className
             )}
             ref={ref}
-            {...props}
           >
+            {placeholder && (
+              <option value="" disabled>
+                {placeholder}
+              </option>
+            )}
             {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -48,7 +64,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <p
             className={cn(
               'mt-1 text-sm',
-              error ? 'text-red-600' : 'text-gray-500'
+              error ? 'text-red-500' : 'text-gray-500'
             )}
           >
             {error || helperText}

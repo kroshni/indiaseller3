@@ -1,36 +1,31 @@
 import { NextResponse } from 'next/server'
-import { getCassandraClient } from '@/lib/db/cassandra'
+import { cassandraClient } from '@/lib/db/cassandra'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth/config'
 import { v4 as uuidv4 } from 'uuid'
 
 // GET /api/admin/brands
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || session.user?.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
-    const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
 
-    const client = await getCassandraClient()
     let query = 'SELECT * FROM brands'
-    let conditions = []
-    let params = []
-
-    if (search) {
-      conditions.push('name LIKE ?')
-      params.push(`%${search}%`)
-    }
+    let params: any[] = []
 
     if (status) {
-      conditions.push('status = ?')
+      query += ' WHERE status = ? ALLOW FILTERING'
       params.push(status)
     }
 
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ') + ' ALLOW FILTERING'
-    }
-
-    const result = await client.execute(query, params, { prepare: true })
+    const result = await cassandraClient.execute(query, params, { prepare: true })
     const total = result.rows.length
     const brands = result.rows.slice((page - 1) * limit, page * limit)
 
@@ -52,23 +47,17 @@ export async function GET(request: Request) {
 // POST /api/admin/brands
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || session.user?.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { name, logo_url = '', description = '', website_url = '', status = 'active' } = body
 
     // Validate required fields
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-    }
-
-    // Check if brand name already exists
-    const checkName = await cassandraClient.execute(
-      'SELECT * FROM brands_by_name WHERE name = ?',
-      [name],
-      { prepare: true }
-    )
-
-    if (checkName.rows.length > 0) {
-      return NextResponse.json({ error: 'Brand with this name already exists' }, { status: 400 })
     }
 
     const id = uuidv4()
@@ -79,13 +68,6 @@ export async function POST(request: Request) {
       `INSERT INTO brands (id, name, logo_url, description, website_url, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, name, logo_url, description, website_url, status, now, now],
-      { prepare: true }
-    )
-
-    // Insert into brands_by_name table
-    await cassandraClient.execute(
-      'INSERT INTO brands_by_name (name, brand_id) VALUES (?, ?)',
-      [name, id],
       { prepare: true }
     )
 
@@ -105,9 +87,14 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT /api/admin/brands
+// PUT /api/admin/brands/[id]
 export async function PUT(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || session.user?.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { id, name, logo_url, description, website_url, status } = body
 
@@ -128,21 +115,6 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    const oldName = currentBrand.rows[0].name
-
-    // Check if new name already exists (if name changed)
-    if (name !== oldName) {
-      const checkName = await cassandraClient.execute(
-        'SELECT * FROM brands_by_name WHERE name = ?',
-        [name],
-        { prepare: true }
-      )
-
-      if (checkName.rows.length > 0) {
-        return NextResponse.json({ error: 'Brand with this name already exists' }, { status: 400 })
-      }
-    }
-
     // Update brands table
     await cassandraClient.execute(
       `UPDATE brands 
@@ -151,20 +123,6 @@ export async function PUT(request: Request) {
       [name, logo_url, description, website_url, status, now, id],
       { prepare: true }
     )
-
-    // Update brands_by_name table
-    if (name !== oldName) {
-      await cassandraClient.execute(
-        'DELETE FROM brands_by_name WHERE name = ?',
-        [oldName],
-        { prepare: true }
-      )
-      await cassandraClient.execute(
-        'INSERT INTO brands_by_name (name, brand_id) VALUES (?, ?)',
-        [name, id],
-        { prepare: true }
-      )
-    }
 
     return NextResponse.json({
       id,
@@ -181,9 +139,14 @@ export async function PUT(request: Request) {
   }
 }
 
-// DELETE /api/admin/brands
+// DELETE /api/admin/brands/[id]
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || session.user?.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
@@ -191,9 +154,9 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
     }
 
-    // Get brand to delete its name reference
+    // Get brand to check if it exists
     const brand = await cassandraClient.execute(
-      'SELECT name FROM brands WHERE id = ?',
+      'SELECT * FROM brands WHERE id = ?',
       [id],
       { prepare: true }
     )
@@ -202,19 +165,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    const name = brand.rows[0].name
-
     // Delete from brands table
     await cassandraClient.execute(
       'DELETE FROM brands WHERE id = ?',
       [id],
-      { prepare: true }
-    )
-
-    // Delete from brands_by_name table
-    await cassandraClient.execute(
-      'DELETE FROM brands_by_name WHERE name = ?',
-      [name],
       { prepare: true }
     )
 

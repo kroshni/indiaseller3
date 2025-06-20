@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import Table from '@/components/ui/Table'
+import Modal from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 
 interface Category {
@@ -11,285 +12,256 @@ interface Category {
   name: string
   slug: string
   description: string
-  status: string
+  status: 'active' | 'inactive'
   created_at: string
   updated_at: string
 }
 
 export default function CategoriesPage() {
-  const router = useRouter()
   const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     status: 'active'
   })
 
-  // Fetch categories
-  const fetchCategories = async () => {
-    try {
-      setLoading(true)
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
-        ...(search && { search }),
-        ...(statusFilter && { status: statusFilter })
-      })
-
-      const response = await fetch(`/api/admin/categories?${params}`)
-      const data = await response.json()
-
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch categories')
-
-      setCategories(data.categories)
-      setTotalPages(data.pagination.totalPages)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     fetchCategories()
-  }, [page, search, statusFilter])
+  }, [])
 
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const fetchCategories = async () => {
     try {
-      const url = '/api/admin/categories'
-      const method = editingCategory ? 'PUT' : 'POST'
-      const body = editingCategory 
-        ? { ...formData, id: editingCategory.id }
-        : formData
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
-
-      setShowModal(false)
-      setEditingCategory(null)
-      setFormData({ name: '', description: '', status: 'active' })
-      fetchCategories()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save category')
-    }
-  }
-
-  // Handle category deletion
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return
-
-    try {
-      const response = await fetch(`/api/admin/categories?id=${id}`, {
-        method: 'DELETE'
-      })
-
+      setIsLoading(true)
+      setError('')
+      const response = await fetch('/api/admin/categories')
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error)
+        throw new Error('Failed to fetch categories')
       }
-
-      fetchCategories()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete category')
+      const data = await response.json()
+      setCategories(data)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      setError('Failed to load categories')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Handle edit button click
+  const columns = [
+    { key: 'name', label: 'Category Name', sortable: true },
+    { key: 'slug', label: 'Slug', sortable: true },
+    { key: 'description', label: 'Description' },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (value: string) => (
+        <span
+          className={`px-2 py-1 rounded-full text-xs font-medium ${
+            value === 'active'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-red-100 text-red-800'
+          }`}
+        >
+          {value.charAt(0).toUpperCase() + value.slice(1)}
+        </span>
+      )
+    }
+  ]
+
+  const handleSort = (key: string, direction: 'asc' | 'desc') => {
+    // Implement sorting logic here
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+    setCurrentPage(1)
+  }
+
+  const handleAdd = () => {
+    setIsEditMode(false)
+    setSelectedCategory(null)
+    setFormData({
+      name: '',
+      description: '',
+      status: 'active'
+    })
+    setIsModalOpen(true)
+  }
+
   const handleEdit = (category: Category) => {
-    setEditingCategory(category)
+    setIsEditMode(true)
+    setSelectedCategory(category)
     setFormData({
       name: category.name,
-      description: category.description || '',
+      description: category.description,
       status: category.status
     })
-    setShowModal(true)
+    setIsModalOpen(true)
   }
 
+  const handleDelete = async (category: Category) => {
+    if (confirm('Are you sure you want to delete this category?')) {
+      try {
+        const response = await fetch(`/api/admin/categories/${category.id}`, {
+          method: 'DELETE'
+        })
+
+        if (response.ok) {
+          setCategories(categories.filter(c => c.id !== category.id))
+        } else {
+          throw new Error('Failed to delete category')
+        }
+      } catch (error) {
+        console.error('Error deleting category:', error)
+        alert('Failed to delete category')
+      }
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    try {
+      const url = isEditMode
+        ? `/api/admin/categories/${selectedCategory?.id}`
+        : '/api/admin/categories'
+      
+      const response = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (isEditMode) {
+          setCategories(categories.map(c => 
+            c.id === selectedCategory?.id ? { ...c, ...data } : c
+          ))
+        } else {
+          setCategories([...categories, data])
+        }
+        setIsModalOpen(false)
+      } else {
+        throw new Error('Failed to save category')
+      }
+    } catch (error) {
+      console.error('Error saving category:', error)
+      alert('Failed to save category')
+    }
+  }
+
+  const renderActions = (category: Category) => (
+    <div className="flex justify-end space-x-2">
+      <Button
+        onClick={() => handleEdit(category)}
+        className="bg-blue-500 hover:bg-blue-600"
+      >
+        Edit
+      </Button>
+      <Button
+        onClick={() => handleDelete(category)}
+        className="bg-red-500 hover:bg-red-600"
+      >
+        Delete
+      </Button>
+    </div>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Categories</h1>
-        <Button onClick={() => setShowModal(true)}>Add Category</Button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Categories</h1>
+        <Button onClick={handleAdd}>Add Category</Button>
       </div>
 
-      {/* Search and Filter */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex justify-between items-center">
         <Input
           type="text"
           placeholder="Search categories..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchTerm}
+          onChange={handleSearch}
           className="max-w-xs"
         />
-        <Select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="max-w-xs"
-        >
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </Select>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
-      {/* Categories Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Slug
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {categories.map((category) => (
-              <tr key={category.id}>
-                <td className="px-6 py-4 whitespace-nowrap">{category.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{category.slug}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    category.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {category.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Button
-                    onClick={() => handleEdit(category)}
-                    className="mr-2"
-                    variant="outline"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    onClick={() => handleDelete(category.id)}
-                    variant="destructive"
-                  >
-                    Delete
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex justify-between items-center mt-4">
-        <Button
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-          disabled={page === 1}
-        >
-          Previous
-        </Button>
-        <span>
-          Page {page} of {totalPages}
-        </span>
-        <Button
-          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-        >
-          Next
-        </Button>
-      </div>
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">
-              {editingCategory ? 'Edit Category' : 'Add Category'}
-            </h2>
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Name
-                </label>
-                <Input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  rows={3}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <Select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowModal(false)
-                    setEditingCategory(null)
-                    setFormData({ name: '', description: '', status: 'active' })
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingCategory ? 'Update' : 'Create'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {isLoading ? (
+        <div className="text-center py-4">Loading categories...</div>
+      ) : (
+        <Table
+          columns={columns}
+          data={categories}
+          onSort={handleSort}
+          onPageChange={handlePageChange}
+          currentPage={currentPage}
+          totalPages={Math.ceil(categories.length / 10)}
+          actions={renderActions}
+        />
       )}
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={isEditMode ? 'Edit Category' : 'Add Category'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="Category Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+          
+          <Input
+            label="Description"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          />
+          
+          <Select
+            label="Status"
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+          />
+          
+          <div className="flex justify-end space-x-2">
+            <Button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="bg-gray-500 hover:bg-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              {isEditMode ? 'Update' : 'Create'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 } 

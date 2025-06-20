@@ -153,11 +153,12 @@ export default function BrandsPage() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="max-w-xs"
-        >
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </Select>
+          options={[
+            { value: '', label: 'All Status' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' }
+          ]}
+        />
       </div>
 
       {/* Error Message */}
@@ -332,10 +333,11 @@ export default function BrandsPage() {
                 <Select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </Select>
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'inactive', label: 'Inactive' }
+                  ]}
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button
